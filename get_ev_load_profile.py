@@ -8,24 +8,9 @@ Created on Thu Jun 23 15:20:11 2016
 import math
 import sqlite3
 
-# Initialize the EV model databese
-conn = sqlite3.connect('ev.sqlite3')
+# Connect the EV model databese
+conn = sqlite3.connect('ev_model.db')
 cur = conn.cursor()
-cur.execute('''
-    CREATE TABLE IF NOT EXISTS Model
-    (name TEXT, C_efficiency REAL, F_efficiency REAL)''')
-
-# add_new_model : Add a new model to the model table (used for test)
-def add_new_model(name, C, F):
-    cur.execute('INSERT INTO Model (name, C_efficiency, F_efficiency) VALUES (?, ?, ?)',
-                (name, C, F))
-    conn.commit()
-
-# display_all_models : display all models in the model table (used for test)
-def display_all_models():
-    cur.execute('SELECT * FROM Model')
-    for row in cur:
-        print(row)
 
 
 """ Get 24-hour load profile for EV charging
@@ -33,9 +18,13 @@ def display_all_models():
     Parameters
     ----------
     distance : float
-        Daily driving distance in km
-    ev_name : string
-        Name of EV
+        Daily driving distance in mile
+    ev_maker : string
+        Maker of EV
+    ev_model : string
+        Model of EV
+    ev_year : int
+        Year of EV        
     charger_type : int
         Type of charger
         -level 1 : 0
@@ -47,23 +36,37 @@ def display_all_models():
     ----------
     load_profile : list
         24-hour load profile when charging is requested
+    charging_time : float
+        24-hour load profile when charging is requested
+    depletion : float
+        24-hour load profile when charging is requested
 """
-charging_load_data = [1.39982502187227, 4.7976011994003, 7.19729043183743, 9.6045197740113]
-resolution = 2  # The number of hourly devision for load profile
+charging_load_data = [1.4, 4.8, 7.2, 9.6] #kW
 
-def get_ev_load_profile(distance, ev_name, charger_type):
-    cur.execute('SELECT C_efficiency, F_efficiency FROM Model WHERE name = ? LIMIT 1', (ev_name, ))
-    charging_efficiency, fuel_efficiency = cur.fetchone()
-    charging_load = charging_load_data[charger_type]
-    energy_consumption = fuel_efficiency * distance
-    charging_time = energy_consumption * resolution / (charging_load * charging_efficiency)
-    charging_time = int(math.ceil(charging_time))   #round up the time
 
-    if charging_time < 24*resolution:
-        load_profile = [charging_load]*charging_time + [0]*(24*resolution-charging_time)
-    else:
-        load_profile = [charging_load]*24*resolution
-        
-    return load_profile
+def get_ev_load_profile(distance, ev_maker, ev_model,  ev_year, charger_type):
+    cur.execute('SELECT combE, range, acceptanceR FROM spec WHERE make = ? AND model = ? AND year = ? LIMIT 1', (ev_maker, ev_model, ev_year))
+    data = cur.fetchone()
+    if data is None:
+        print('There is no model matching to %s, %s, %d in the database' %(ev_maker, ev_model,  ev_year))
+        return  
+    consumption_rate, range_mile, acceptance_load = data
+
+    # check if the distance exceeds the maximum range
+    if  distance > range_mile:
+        distance = range_mile
+    depletion = distance / range_mile
     
+    # choose the smaller load from charger load and acceptance load
+    charging_load = min(charging_load_data[charger_type], acceptance_load)
+
+    # compute charging time
+    charging_time = consumption_rate * distance / 100 / charging_load
+    if charging_time < 48:
+        t = int(math.ceil(charging_time*2))  # round up the time
+        load_profile = [charging_load]*t + [0]*(48-t)
+    else:
+        load_profile = [charging_load]*48
+        
+    return {'load_profile' : load_profile, 'charging_time' : charging_time, 'depletion' : depletion}
     
