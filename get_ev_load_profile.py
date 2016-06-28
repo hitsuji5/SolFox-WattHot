@@ -55,7 +55,7 @@ def get_ev_load_profile(distance, ev_maker, ev_model,  ev_year, charger_type):
     # check if the distance exceeds the maximum range
     if  distance > range_mile:
         distance = range_mile
-    depletion = distance / range_mile
+    depletion = float(distance) / range_mile
     
     # choose the smaller load from charger load and acceptance load
     charging_load = min(charging_load_data[charger_type], acceptance_load)
