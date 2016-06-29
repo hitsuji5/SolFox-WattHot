@@ -8,9 +8,10 @@ Created on Mon Jun 27 10:56:10 2016
 import falcon
 import json
 import logging
-import get_ev_load_profile as ev
- 
-class EvResource:
+from lib import evLoad as ev
+from lib import hhLoad as hh
+
+class EvLoad:
     def __init__(self):
         self.logger = logging.getLogger('evapp.' + __name__)
         
@@ -34,6 +35,34 @@ class EvResource:
                 description,
                 30)
         resp.body = json.dumps(result)
+
+class HouseHoldLoad:
+    def __init__(self):
+        self.logger = logging.getLogger('evapp.' + __name__)
+        
+    def on_get(self, req, resp):
+        N_room = req.get_param_as_int('N_room') or 0
+        N_day = req.get_param_as_int('N_day') or 0
+        N_night = req.get_param_as_int('N_night') or 0
+        Ls_App = req.get_param_as_list('Ls_App') or []
+        
+        try:
+            result = hh.get_household_load_profile(N_room, N_day, N_night, Ls_App)
+        except Exception as ex:
+            self.logger.error(ex)
+            description = ('Aliens have attacked our base! We will '
+                           'be back as soon as we fight them off. '
+                           'We appreciate your patience.')
+
+            raise falcon.HTTPServiceUnavailable(
+                'Service Outage',
+                description,
+                30)
+        resp.body = json.dumps(result)
  
 app = falcon.API()
-app.add_route('/ev', EvResource())
+ev_load = EvLoad()
+hh_load = HouseHoldLoad()
+
+app.add_route('/ev/load', ev_load)
+app.add_route('/household/load', hh_load)
