@@ -5,7 +5,7 @@ from operator import itemgetter
 import copy
 import sqlite3
 
-conn=sqlite3.connect('../db/Household.db')
+conn=sqlite3.connect('db/Household_15mins.db')
 cur = conn.cursor()
 Def_Load=pd.read_sql('SELECT * FROM Deferred_Load',conn)
 Profile=pd.read_sql('SELECT * FROM Profile',conn)
@@ -52,7 +52,7 @@ Ave_Input=pd.read_sql('SELECT * FROM Pred_Monthly_Cost',conn).as_matrix()
 
 '''
 ################ Example Modeling Input####################
-#N_day=2;N_night=4;N_room=1;Ls_App=[1,0,1,1,1,0]                 	#The Input here shouble be achieved from Website
+#N_day=2;N_night=4;N_room=1;Ls_App=[1,0,1,1,1,0]                 		#The Input here shouble be achieved from Website
 ################################################## 
 def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,Cust_Monthly_KWh=0):
 
@@ -97,18 +97,19 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 	Input_List=Input_Ls(N_day,N_night,Ls_App)
 	#Both Cust_Monthly_Cost,Cust_MOnthly_KWh are not given
 	if Cust_Monthly_Cost==0 and Cust_Monthly_KWh==0:
-		Pred_Ave_KWh=Ave_KWh(N_room,N_day,N_night)                  #Predicted Average Consumption KWh
+		Pred_Ave_KWh=Ave_KWh(N_room,N_day,N_night)                  	#Predicted Average Consumption KWh
 	#Cosr or KWh is given	
 	if Cust_Monthly_Cost==0 and Cust_Monthly_KWh !=0:
-		Pred_Ave_KWh=Cust_Monthly_KWh
+		Pred_Ave_KWh=Cust_MOnthly_KWh
 	if Cust_Monthly_Cost !=0 and Cust_Monthly_KWh==0:
 		Pred_Ave_KWh=Cost_to_KWh(Cust_Monthly_Cost)
 
 	Cust_Profile=copy.copy(Matching(Input_List))
-	Cust_Profile*=Pred_Ave_KWh										#Resulted 24 vector Total consumption 
-	if Ls_App[4]==1:                                                #Adding Swimming Pump Consumption
+	Cust_Profile*=Pred_Ave_KWh											#Resulted 24 vector Total consumption
+	Cust_Total_Profile=copy.copy(Cust_Profile)
+	if Ls_App[4]==1:                                                	#Adding Swimming Pump Consumption
 		Cust_Profile+=1.12
-	if Ls_App[5]==1:                                                #Adding HVAC Consumption
+	if Ls_App[5]==1:                                                	#Adding HVAC Consumption
 		Cust_Profile+=0.356
 
 	#Calculating Baseline and Deferred Loading
@@ -122,11 +123,11 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 	#Find the index that appliance element==1
 	def find_number_in_list(lst, Num):
 		return [i for i, x in enumerate(lst) if x==Num]
-	Def_Load_Index=find_number_in_list(Ls_App[1:4],1)				#Only [1:4]
-	Def_Load_Index = [x+1 for x in Def_Load_Index]					#Index Shifting since the List start from 1
+	Def_Load_Index=find_number_in_list(Ls_App[1:4],1)					#Only [1:4]
+	Def_Load_Index = [x+1 for x in Def_Load_Index]						#Index Shifting since the List start from 1
 	Cust_Def=Def_Load.iloc[Def_Load_Index]
 
-	#Find possible hours' index in the deferred loading
+	#Find possible hours' index of the duration in the deferred loading
 	def Baseline(lst, num):
 		return [i for i, x in enumerate(lst) if x>=num ]
 	#Find the time interval of the deferred load
@@ -134,11 +135,11 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 		for k, g in groupby(enumerate(lst), lambda (i, x): i-x):
 			group=(map(itemgetter(1), g))
 			if len(group)>1:
-				Peak_Hour=filter(lambda x:x>=15 and x<=21,group)       #filter off-peak Hour; Assume 15:00-21:00 is Peak Hour
+				Peak_Hour=filter(lambda x:x>=15 and x<=21,group)       	#filter off-peak Hour; Assume 15:00-21:00 is Peak Hour
 				if len(Peak_Hour)>1:
 					group=Peak_Hour
 				if len(group)>0:
-					return group[0:2]
+					return group[0:4]
 
 
 	#Generate three vectors for each deferred load and the resulted baseline profile
@@ -158,7 +159,7 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 
 	'''
 
-	Deferred_Matrix=np.zeros((3,25))         #Initialize Matrix
+	Deferred_Matrix=np.zeros((3,100))         #Initialize Matrix
 
 	for Def_Item in Def_Load_Index:
 		Def_Loading=Cust_Def['Average Daily Consumption(KWh)'][Def_Item]
@@ -170,4 +171,8 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 				Deferred_Matrix[(Def_Item-1,Def_Duration[1])]=Def_Loading        #Resulted Deferred Loading Plot
 		Cust_Profile-=Deferred_Matrix[Def_Item-1]
 
-	return {'Cust_Profile':Cust_Profile, 'Defferred_Matrix':Deferred_Matrix}
+	return {
+        'Cust_Total_Profile':Cust_Total_Profile.tolist(),
+        'Cust_Profile':Cust_Profile.tolist(),
+        'Deferred_Matrix':Deferred_Matrix.tolist()
+        }
