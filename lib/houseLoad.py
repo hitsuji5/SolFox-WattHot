@@ -1,17 +1,11 @@
-import requests as rqb
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import scipy as sp
-from numpy import genfromtxt
-import boto
-import gzip
 from itertools import groupby
 from operator import itemgetter
 import copy
 import sqlite3
 
-conn=sqlite3.connect('Household.db')
+conn=sqlite3.connect('../db/Household.db')
 cur = conn.cursor()
 Def_Load=pd.read_sql('SELECT * FROM Deferred_Load',conn)
 Profile=pd.read_sql('SELECT * FROM Profile',conn)
@@ -106,7 +100,7 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 		Pred_Ave_KWh=Ave_KWh(N_room,N_day,N_night)                  #Predicted Average Consumption KWh
 	#Cosr or KWh is given	
 	if Cust_Monthly_Cost==0 and Cust_Monthly_KWh !=0:
-		Pred_Ave_KWh=Cust_MOnthly_KWh
+		Pred_Ave_KWh=Cust_Monthly_KWh
 	if Cust_Monthly_Cost !=0 and Cust_Monthly_KWh==0:
 		Pred_Ave_KWh=Cost_to_KWh(Cust_Monthly_Cost)
 
@@ -137,7 +131,7 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 		return [i for i, x in enumerate(lst) if x>=num ]
 	#Find the time interval of the deferred load
 	def Def_Load_Time(lst):
-		for k, g in groupby(enumerate(lst), lambda i, x: i-x):
+		for k, g in groupby(enumerate(lst), lambda (i, x): i-x):
 			group=(map(itemgetter(1), g))
 			if len(group)>1:
 				Peak_Hour=filter(lambda x:x>=15 and x<=21,group)       #filter off-peak Hour; Assume 15:00-21:00 is Peak Hour
@@ -176,4 +170,4 @@ def get_household_load_profile(N_room, N_day,N_night,Ls_App,Cust_Monthly_Cost=0,
 				Deferred_Matrix[(Def_Item-1,Def_Duration[1])]=Def_Loading        #Resulted Deferred Loading Plot
 		Cust_Profile-=Deferred_Matrix[Def_Item-1]
 
-	return Cust_Profile, Deferred_Matrix
+	return {'Cust_Profile':Cust_Profile, 'Defferred_Matrix':Deferred_Matrix}
